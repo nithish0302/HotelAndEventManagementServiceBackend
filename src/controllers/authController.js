@@ -77,4 +77,68 @@ const createUser = async (req, res) => {
   }
 };
 
-module.exports = { createUser };
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(404).json({ message: "Email and Password are needed" });
+    }
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(409).json({ message: "User not found" });
+    }
+
+    const isPasswordMatch = await user.comparePassword(password);
+    if (!isPasswordMatch) {
+      return res.status(403).json({ message: "Invalid credentials" });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({ message: "Account is not active" });
+    }
+
+    const accessToken = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.ACCESS_TOKEN,
+      {
+        expiresIn: "15m",
+      }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.REFRESH_TOKEN,
+      {
+        expiresIn: "7d",
+      }
+    );
+    user.refreshToken = refreshToken;
+    await user.save();
+    const isProduction = process.env.NODE_ENV === "production";
+
+    res.cookie("jwt", refreshToken, {
+      httpOnly: true,
+      secure: isProduction ? true : false,
+      sameSite: isProduction ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(200).json({
+      message: "Login Successfull",
+      accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    console.error(`Server error occured ${error}`);
+    return res.status(500).json({ message: `Server Error`, error: error });
+  }
+};
+
+module.exports = { createUser, login };

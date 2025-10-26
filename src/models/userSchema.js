@@ -39,6 +39,7 @@ const userSchema = new mongoose.Schema(
         match: [/^\d{6}$/, "Pincode must be a 6-digit number"],
       },
     },
+    refreshToken: { type: String },
   },
   options
 );
@@ -56,7 +57,7 @@ userSchema.pre("save", async function (next) {
   }
 });
 
- // During Login it work for checking the password 
+// During Login it work for checking the password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
