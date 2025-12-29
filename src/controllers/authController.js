@@ -1,6 +1,6 @@
-const User = require("../models/userSchema");
-const Vendor = require("../models/vendorSchema");
-const bcrypt = require("bcryptjs");
+const BaseUser = require("../models/BaseUser");
+const User = require("../models/User");
+const Vendor = require("../models/Vendor");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -22,23 +22,19 @@ const createUser = async (req, res) => {
       paymentDetails,
     } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // ✅ Check if user already exists (BASE MODEL)
+    const existingUser = await BaseUser.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     let newUser;
 
     if (role === "vendor") {
-      // Create vendor using Vendor discriminator
       newUser = await Vendor.create({
         name,
         email,
-        password: hashedPassword,
+        password, // 👈 plain text (schema hashes it)
         profileImage,
         address,
         businessName,
@@ -50,47 +46,57 @@ const createUser = async (req, res) => {
         paymentDetails,
       });
     } else if (role === "user") {
-      // Create normal user
       newUser = await User.create({
         name,
         email,
-        password: hashedPassword,
+        password, // 👈 plain text
         profileImage,
         address,
       });
-    } else if (role === "admin") {
-      return res
-        .status(403)
-        .json({ message: "Admin cannot be created via API" });
     } else {
       return res.status(400).json({ message: "Invalid role" });
     }
 
-    return res
-      .status(201)
-      .json({ message: "User created successfully", user: newUser });
+    return res.status(201).json({
+      message: "User created successfully",
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        profileImage: newUser.profileImage,
+        address: newUser.address,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt,
+      },
+    });
   } catch (error) {
-    console.error("Error creating user:", error);
-    return res
-      .status(500)
-      .json({ message: "Server error", error: error.message });
+    console.error("Create user error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
 
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     if (!email || !password) {
-      return res.status(404).json({ message: "Email and Password are needed" });
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
     }
-    const user = await User.findOne({ email });
 
+    // 🔥 ALWAYS USE BASE USER FOR LOGIN
+    const user = await BaseUser.findOne({ email });
     if (!user) {
-      return res.status(409).json({ message: "User not found" });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const isPasswordMatch = await user.comparePassword(password);
-    if (!isPasswordMatch) {
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
       return res.status(403).json({ message: "Invalid credentials" });
     }
 
@@ -101,31 +107,25 @@ const login = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
       process.env.ACCESS_TOKEN,
-      {
-        expiresIn: "15m",
-      }
+      { expiresIn: "15m" }
     );
 
-    const refreshToken = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.REFRESH_TOKEN,
-      {
-        expiresIn: "7d",
-      }
-    );
+    const refreshToken = jwt.sign({ id: user._id }, process.env.REFRESH_TOKEN, {
+      expiresIn: "7d",
+    });
+
     user.refreshToken = refreshToken;
     await user.save();
-    const isProduction = process.env.NODE_ENV === "production";
 
     res.cookie("jwt", refreshToken, {
       httpOnly: true,
-      secure: isProduction ? true : false,
-      sameSite: isProduction ? "strict" : "lax",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
-      message: "Login Successfull",
+      message: "Login successful",
       accessToken,
       user: {
         id: user._id,
@@ -136,8 +136,11 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(`Server error occured ${error}`);
-    return res.status(500).json({ message: `Server Error`, error: error });
+    console.error("Login error:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
 
