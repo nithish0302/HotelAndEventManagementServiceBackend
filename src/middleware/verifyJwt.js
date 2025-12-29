@@ -4,7 +4,6 @@ require("dotenv").config();
 const verifyJwt = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  // ✅ Check header exists and starts with Bearer
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res
       .status(401)
@@ -15,14 +14,12 @@ const verifyJwt = (req, res, next) => {
 
   jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
     if (err) {
-      // ✅ Correct way to detect expired token
       if (err.name === "TokenExpiredError") {
         return res.status(401).json({ message: "Token expired" });
       }
       return res.status(403).json({ message: "Invalid token" });
     }
 
-    // ✅ Attach decoded data to request
     req.userId = decoded.id;
     req.email = decoded.email;
     req.role = decoded.role;
