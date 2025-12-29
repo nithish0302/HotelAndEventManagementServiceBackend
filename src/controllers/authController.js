@@ -89,7 +89,6 @@ const login = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
 
-    // 🔥 ALWAYS USE BASE USER FOR LOGIN
     const user = await BaseUser.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -144,4 +143,29 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { createUser, login };
+const logout = async (req, res) => {
+  try {
+    const cookies = req.cookies;
+
+    if (!cookies?.jwt) {
+      return res.sendStatus(204);
+    }
+    const refreshToken = cookies.jwt;
+    const user = await BaseUser.findOne({ refreshToken });
+    if (user) {
+      user.refreshToken = null;
+      await user.save();
+    }
+    res.clearCookie("jwt", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    return res.status(200).json({ messafe: "Logged out successfully" });
+  } catch (error) {
+    console.error("Logout error:", error);
+    res.status(500).json({ message: "Logout failed" });
+  }
+};
+
+module.exports = { createUser, login, logout };
