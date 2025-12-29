@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
-const Admin = require("./src/models/adminSchema"); // Admin discriminator
+// Admin discriminator
 const bcrypt = require("bcryptjs");
 const user = require("./src/routes/authRoutes");
 const cookieParser = require("cookie-parser");
