@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const BaseUser = require("./BaseUser");
 
 const vendorSchema = new mongoose.Schema({
+  profileImage: { type: String },
+
   businessName: {
     type: String,
     required: true,
@@ -58,6 +60,7 @@ const vendorSchema = new mongoose.Schema({
     min: 0,
     max: 100,
   },
+  
 });
 
 module.exports = BaseUser.discriminator("vendor", vendorSchema);
